@@ -59,7 +59,89 @@ In order to ensure that the Laravel community is welcoming to all, please review
 
 ## Security Vulnerabilities
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). 
+
+
+<?php
+
+namespace Firefly\FilamentBlog\Http\Controllers;
+
+use Firefly\FilamentBlog\Facades\SEOMeta;
+use Firefly\FilamentBlog\Models\NewsLetter;
+use Firefly\FilamentBlog\Models\Post;
+use Firefly\FilamentBlog\Models\ShareSnippet;
+use Illuminate\Http\Request;
+
+class PostController extends Controller
+{
+    public function index(Request $request)
+    {
+        SEOMeta::setTitle('Blog | '.config('app.name')) ;
+
+        $posts = Post::query()->with(['categories', 'user', 'tags'])
+            ->published()
+            ->paginate(10);
+
+        return response()->json($posts);
+    }
+
+    public function allPosts()
+    {
+        SEOMeta::setTitle('All posts | '.config('app.name')) ;
+
+        $posts = Post::query()->with(['categories', 'user'])
+            ->published()
+            ->paginate(20);
+
+        return response()->json($posts);
+    }
+
+    public function search(Request $request)
+    {
+        SEOMeta::setTitle('Search result for '.$request->get('query'));
+
+        $request->validate([
+            'query' => 'required',
+        ]);
+        $searchedPosts = Post::query()
+            ->with(['categories', 'user'])
+            ->published()
+            ->whereAny(['title', 'sub_title'], 'like', '%'.$request->get('query').'%')
+            ->paginate(10)->withQueryString();
+
+        return response()->json($searchedPosts);
+    }
+
+    public function show(Post $post)
+    {
+
+        SEOMeta::setTitle($post->seoDetail?->title);
+
+        SEOMeta::setDescription($post->seoDetail?->description);
+
+        SEOMeta::setKeywords($post->seoDetail->keywords ?? []);
+
+        $shareButton = ShareSnippet::query()->active()->first();
+        $post->load(['user', 'categories', 'tags', 'comments' => fn ($query) => $query->approved(), 'comments.user']);
+
+        return response()->json($post);
+    }
+
+    public function subscribe(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email|unique:news_letters,email',
+        ], [
+            'email.unique' => 'You have already subscribed',
+        ]);
+        NewsLetter::create([
+            'email' => $request->email,
+        ]);
+
+        return response()->json(['message' => 'You have successfully subscribed to our news letter']);
+    }
+}
+
 
 ## License
 
